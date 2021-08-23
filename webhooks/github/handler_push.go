@@ -12,6 +12,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 	lenCommits := len(event.Commits)
 
 	builder := discord.NewEmbedBuilder().
+		SetColor(0x00BCD4).
 		SetAuthor(*event.Pusher.Name,
 			discord.WithAuthorUrl(*event.Pusher.URL),
 			discord.WithAuthorIcon(*event.Pusher.AvatarURL)).
@@ -49,7 +50,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		builder.AddField(title, description)
 	}
 
-	h.executor.EnqueueEmbeds(h.webhookUri, builder.Build())
+	h.executor.EnqueueEmbeds(h.config.ChangelogWebhookUrl, builder.Build())
 
 	return nil
 }

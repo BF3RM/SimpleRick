@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/google/uuid"
-	"log"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"sync"
 )
@@ -21,7 +21,7 @@ type Executor struct {
 	queues map[string]executorQueue
 }
 
-func NewExecutor() *Executor {
+func ProvideExecutor() *Executor {
 	return &Executor{
 		queues: make(map[string]executorQueue),
 	}
@@ -40,7 +40,7 @@ func (e *Executor) enqueue(url string, payload WebhookPayload) {
 			queue: make(chan *executorTask),
 		}
 		e.queues[url] = queue
-		go queue.process()
+		go queue.start()
 	}
 	e.mu.Unlock()
 
@@ -59,10 +59,13 @@ type executorQueue struct {
 
 func (q executorQueue) enqueue(task *executorTask) {
 	q.queue <- task
+	log.Debug().
+		Str("task", task.id.String()).
+		Msgf("[Discord] Enqueued new task for %s, has %d pending tasks", q.url, len(q.queue))
 }
 
-func (q executorQueue) process() {
-	log.Printf("Started goroutine to process queue for %s\n", q.url)
+func (q executorQueue) start() {
+	log.Info().Msgf("[Discord] Started queue for %s", q.url)
 
 	for {
 		select {
@@ -73,21 +76,38 @@ func (q executorQueue) process() {
 }
 
 func (q executorQueue) processTask(task *executorTask) {
+	log.Debug().
+		Str("task", task.id.String()).
+		Int("attempt", task.attempts).
+		Msg("[Discord] Started processing task")
 	var buf bytes.Buffer
 	err := json.NewEncoder(&buf).Encode(&task.payload)
 	if err != nil {
-		log.Printf("Failed to encode payload of task %s, err=%v\n", task.id, err)
+		log.Error().
+			Err(err).
+			Str("task", task.id.String()).
+			Int("attempt", task.attempts).
+			Msg("[Discord] Failed to encode payload")
 		return
 	}
 
 	res, err := http.Post(q.url, "application/json", &buf)
 	if err != nil {
-		log.Printf("Failed to send payload of task %s, err=%v\n", task.id, err)
+		log.Error().
+			Err(err).
+			Str("task", task.id.String()).
+			Int("attempt", task.attempts).
+			Msg("[Discord] Failed to send payload")
+		return
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		log.Printf("Unexpected response received for task %s, server responded with %s", task.id, res.StatusCode)
+		log.Error().
+			Err(err).
+			Str("task", task.id.String()).
+			Int("attempt", task.attempts).
+			Msgf("[Discord] Received unexpected response from server: %d", res.StatusCode)
 	}
 	// TODO: Handle rate limiting
 }

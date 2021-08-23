@@ -2,30 +2,31 @@ package sentry
 
 import (
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"net/http"
+	"simplerick/internal"
 	"simplerick/internal/discord"
 	"simplerick/internal/sentry"
 	"time"
 )
 
 type WebhookHandler struct {
-	executor   *discord.Executor
-	secret     []byte
-	webhookUri string
+	executor *discord.Executor
+	config   internal.SentryWebhookConfig
 }
 
-func New(executor *discord.Executor, secret []byte, webhookUri string) WebhookHandler {
+func ProvideWebhookHandler(executor *discord.Executor, config internal.SentryWebhookConfig) WebhookHandler {
 	return WebhookHandler{
-		executor:   executor,
-		secret:     secret,
-		webhookUri: webhookUri,
+		executor: executor,
+		config:   config,
 	}
 }
 
 func (r WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
-	payload, err := sentry.ParseWebhook(req, r.secret)
+	payload, err := sentry.ParseWebhook(req, r.config.Secret)
 	if err != nil {
-		fmt.Println(err)
+		log.Error().Err(err).Msg("[Sentry] Failed to parse payload")
+		w.WriteHeader(http.StatusBadRequest)
 	}
 
 	switch data := payload.Data.(type) {
@@ -63,7 +64,7 @@ func (r WebhookHandler) handleIssue(action sentry.EventAction, data *sentry.Issu
 		builder.SetColor(0x2ECC71) // resolved
 	}
 
-	r.executor.EnqueueEmbeds(r.webhookUri, builder.Build())
+	r.executor.EnqueueEmbeds(r.config.IssuesWebhookUrl, builder.Build())
 
 	return nil
 }
