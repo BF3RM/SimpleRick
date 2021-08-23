@@ -18,7 +18,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 
 	builder := discord.NewEmbedBuilder().
 		SetColor(0x00BCD4).
-		SetAuthor(*event.Sender.Name,
+		SetAuthor(*event.Sender.Login,
 			discord.WithAuthorUrl(*event.Sender.HTMLURL),
 			discord.WithAuthorIcon(*event.Sender.AvatarURL)).
 		SetDescription(fmt.Sprintf("to branch **%s** of **%s**", branch, *event.Repo.Name)).
