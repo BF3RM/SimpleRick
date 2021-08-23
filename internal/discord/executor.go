@@ -102,12 +102,15 @@ func (q executorQueue) processTask(task *executorTask) {
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		log.Error().
 			Err(err).
 			Str("task", task.id.String()).
 			Int("attempt", task.attempts).
 			Msgf("[Discord] Received unexpected response from server: %d", res.StatusCode)
 	}
+
 	// TODO: Handle rate limiting
+
+	log.Debug().Str("task", task.id.String()).Msg("Successfully processed task")
 }
