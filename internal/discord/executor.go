@@ -3,10 +3,13 @@ package discord
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"strconv"
 	"sync"
+	"time"
 )
 
 type executorTask struct {
@@ -61,7 +64,7 @@ func (q executorQueue) enqueue(task *executorTask) {
 	q.queue <- task
 	log.Debug().
 		Str("task", task.id.String()).
-		Msgf("[Discord] Enqueued new task for %s, has %d pending tasks", q.url, len(q.queue))
+		Msgf("[Discord] Enqueued task for %s, has %d pending tasks", q.url, len(q.queue))
 }
 
 func (q executorQueue) start() {
@@ -80,6 +83,9 @@ func (q executorQueue) processTask(task *executorTask) {
 		Str("task", task.id.String()).
 		Int("attempt", task.attempts).
 		Msg("[Discord] Started processing task")
+
+	task.attempts++
+
 	var buf bytes.Buffer
 	err := json.NewEncoder(&buf).Encode(&task.payload)
 	if err != nil {
@@ -102,15 +108,52 @@ func (q executorQueue) processTask(task *executorTask) {
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode >= 200 && res.StatusCode < 300 {
-		log.Error().
-			Err(err).
-			Str("task", task.id.String()).
-			Int("attempt", task.attempts).
-			Msgf("[Discord] Received unexpected response from server: %d", res.StatusCode)
+	if !isSuccessHttpCode(res.StatusCode) {
+		if res.StatusCode == http.StatusTooManyRequests {
+			resetTime, err := getRateLimitResetTime(res)
+			if err != nil {
+				log.Error().Err(err).Msg("[Discord] Got rate limited and expected rate limit headers to be set")
+				return
+			}
+			resetAfter := resetTime.Sub(time.Now())
+			log.Warn().
+				Str("task", task.id.String()).
+				Int("attempt", task.attempts).
+				Msgf("[Discord] Got rate limited, re-queueing in %s", resetAfter)
+
+			if resetAfter > 0 {
+				time.Sleep(resetAfter)
+			}
+			q.enqueue(task)
+		} else {
+			log.Error().
+				Str("task", task.id.String()).
+				Int("attempt", task.attempts).
+				Msgf("[Discord] Received unexpected response from server: %d", res.StatusCode)
+			return
+		}
 	}
 
-	// TODO: Handle rate limiting
+	log.Debug().
+		Str("task", task.id.String()).
+		Int("attempt", task.attempts).
+		Msg("[Discord] Successfully processed task")
+}
 
-	log.Debug().Str("task", task.id.String()).Msg("Successfully processed task")
+func getRateLimitResetTime(res *http.Response) (time.Time, error) {
+	resetTimeStr := res.Header.Get("x-ratelimit-reset")
+	if len(resetTimeStr) == 0 {
+		return time.Time{}, errors.New("expected an x-ratelimit-reset header")
+	}
+
+	resetTime, err := strconv.ParseInt(resetTimeStr, 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return time.Unix(resetTime, 0), nil
+}
+
+func isSuccessHttpCode(statusCode int) bool {
+	return statusCode >= 200 && statusCode < 300
 }
