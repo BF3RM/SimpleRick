@@ -14,14 +14,15 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 	builder := discord.NewEmbedBuilder().
 		SetColor(0x00BCD4).
 		SetAuthor(*event.Pusher.Name,
-			discord.WithAuthorUrl(*event.Sender.URL),
+			discord.WithAuthorUrl(*event.Sender.HTMLURL),
 			discord.WithAuthorIcon(*event.Sender.AvatarURL)).
-		SetDescription(fmt.Sprintf("to **%s** of %s", branch, *event.Repo.Name)).
+		SetDescription(fmt.Sprintf("to branch **%s** of **%s**", branch, *event.Repo.Name)).
+		SetFooter("Simple Rick - GitHub").
 		AddTimestamp()
 
 	if lenCommits == 1 {
 		builder.
-			SetTitle("Pushed 1 commit").
+			SetTitle("Pushed a commit").
 			SetURL(*event.Commits[0].URL)
 	} else {
 		builder.
@@ -29,7 +30,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 			SetURL(*event.Compare)
 	}
 
-	// If more than 25 commits, grap last 25
+	// If more than 25 commits, grab last 25
 	if lenCommits > 25 {
 		event.Commits = event.Commits[lenCommits-26 : lenCommits-1]
 	}
