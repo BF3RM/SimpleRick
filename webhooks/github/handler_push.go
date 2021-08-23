@@ -12,9 +12,13 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 	branch := (*event.Ref)[len("refs/heads/"):]
 	lenCommits := len(event.Commits)
 
+	if lenCommits == 0 {
+		return nil
+	}
+
 	builder := discord.NewEmbedBuilder().
 		SetColor(0x00BCD4).
-		SetAuthor(*event.Pusher.Name,
+		SetAuthor(*event.Sender.Name,
 			discord.WithAuthorUrl(*event.Sender.HTMLURL),
 			discord.WithAuthorIcon(*event.Sender.AvatarURL)).
 		SetDescription(fmt.Sprintf("to branch **%s** of **%s**", branch, *event.Repo.Name)).

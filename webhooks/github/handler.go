@@ -43,6 +43,10 @@ func (h WebhookHandler) Handler(w http.ResponseWriter, r *http.Request) {
 	switch e := event.(type) {
 	case *github.PushEvent:
 		err = h.handlePushEvent(e)
+	case *github.CreateEvent:
+		err = h.handleCreateEvent(e)
+	case *github.DeleteEvent:
+		err = h.handleDeleteEvent(e)
 	}
 
 	if err != nil {
