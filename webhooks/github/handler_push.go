@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/go-github/github"
 	"simplerick/internal/discord"
+	"simplerick/internal/utils"
 	"strings"
 )
 
@@ -43,10 +44,8 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		description := fmt.Sprintf("- **%s**", *commit.Committer.Name)
 
 		if len(messages) > 1 {
-			description = strings.Join(messages[1:], "\n") + "\n" + description
+			description = utils.Ellipsis(strings.Join(messages[1:], "\n"), 255-len(description)) + "\n" + description
 		}
-
-		// TODO: Limit to 255 characters
 
 		builder.AddField(title, description)
 	}

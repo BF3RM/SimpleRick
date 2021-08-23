@@ -79,12 +79,12 @@ func (q executorQueue) start() {
 }
 
 func (q executorQueue) processTask(task *executorTask) {
+	task.attempts++
+
 	log.Debug().
 		Str("task", task.id.String()).
 		Int("attempt", task.attempts).
 		Msg("[Discord] Started processing task")
-
-	task.attempts++
 
 	var buf bytes.Buffer
 	err := json.NewEncoder(&buf).Encode(&task.payload)
