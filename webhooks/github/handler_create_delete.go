@@ -21,7 +21,7 @@ func (h WebhookHandler) handleCreateEvent(event *github.CreateEvent) error {
 		SetFooter("Simple Rick - GitHub").
 		AddTimestamp()
 
-	h.executor.EnqueueEmbeds(h.config.ChangelogWebhookUrl, builder.Build())
+	h.executor.EnqueueEmbed(h.config.ChangelogWebhookUrl, builder.Build())
 
 	return nil
 }
@@ -40,7 +40,7 @@ func (h WebhookHandler) handleDeleteEvent(event *github.DeleteEvent) error {
 		SetFooter("Simple Rick - GitHub").
 		AddTimestamp()
 
-	h.executor.EnqueueEmbeds(h.config.ChangelogWebhookUrl, builder.Build())
+	h.executor.EnqueueEmbed(h.config.ChangelogWebhookUrl, builder.Build())
 
 	return nil
 }

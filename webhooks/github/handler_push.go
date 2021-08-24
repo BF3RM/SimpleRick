@@ -54,7 +54,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		builder.AddField(title, description)
 	}
 
-	h.executor.EnqueueEmbeds(h.config.ChangelogWebhookUrl, builder.Build())
+	h.executor.EnqueueEmbed(h.config.ChangelogWebhookUrl, builder.Build())
 
 	return nil
 }

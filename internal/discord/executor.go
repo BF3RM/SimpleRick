@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -12,11 +13,24 @@ import (
 	"time"
 )
 
+type EnqueueOption func(task *executorTask)
+
+func WithTrackingKey(key string) EnqueueOption {
+	return func(task *executorTask) {
+		task.key = key
+	}
+}
+
 type executorTask struct {
 	id          uuid.UUID
+	key         string
 	attempts    int
 	maxAttempts int
 	payload     WebhookPayload
+}
+
+func (e executorTask) shouldTrack() bool {
+	return len(e.key) != 0
 }
 
 type Executor struct {
@@ -30,34 +44,46 @@ func ProvideExecutor() *Executor {
 	}
 }
 
-func (e *Executor) EnqueueEmbeds(url string, embeds ...Embed) {
-	e.enqueue(url, WebhookPayload{Embeds: embeds})
+func (e *Executor) EnqueueEmbed(url string, embed Embed, opts ...EnqueueOption) {
+	e.enqueue(url, WebhookPayload{Embeds: []Embed{embed}}, opts...)
 }
 
-func (e *Executor) enqueue(url string, payload WebhookPayload) {
+func (e *Executor) enqueue(url string, payload WebhookPayload, opts ...EnqueueOption) {
 	e.mu.Lock()
 	queue, ok := e.queues[url]
 	if !ok {
-		queue = executorQueue{
-			url:   url,
-			queue: make(chan *executorTask),
-		}
+		queue = newQueue(url, DefaultTracker())
 		e.queues[url] = queue
 		go queue.start()
 	}
 	e.mu.Unlock()
 
-	queue.enqueue(&executorTask{
+	task := &executorTask{
 		id:          uuid.New(),
 		attempts:    0,
 		maxAttempts: 3,
 		payload:     payload,
-	})
+	}
+
+	for _, opt := range opts {
+		opt(task)
+	}
+
+	queue.enqueue(task)
+}
+
+func newQueue(url string, tracker *Tracker) executorQueue {
+	return executorQueue{
+		url:     url,
+		queue:   make(chan *executorTask),
+		tracker: tracker,
+	}
 }
 
 type executorQueue struct {
-	url   string
-	queue chan *executorTask
+	url     string
+	queue   chan *executorTask
+	tracker *Tracker
 }
 
 func (q executorQueue) enqueue(task *executorTask) {
@@ -97,7 +123,32 @@ func (q executorQueue) processTask(task *executorTask) {
 		return
 	}
 
-	res, err := http.Post(q.url, "application/json", &buf)
+	var res *http.Response
+	if task.shouldTrack() {
+		if msgId, tracked := q.tracker.GetMessageID(task.key); tracked {
+			req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/messages/%s?wait=true", q.url, msgId), &buf)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("task", task.id.String()).
+					Int("attempt", task.attempts).
+					Msg("[Discord] Failed to construct patch request")
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			res, err = http.DefaultClient.Do(req)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("task", task.id.String()).
+					Int("attempt", task.attempts).
+					Msg("[Discord] Failed to send patch payload")
+				return
+			}
+			goto processRes
+		}
+	}
+	res, err = http.Post(fmt.Sprintf("%s?wait=true", q.url), "application/json", &buf)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -106,6 +157,8 @@ func (q executorQueue) processTask(task *executorTask) {
 			Msg("[Discord] Failed to send payload")
 		return
 	}
+
+processRes:
 	defer res.Body.Close()
 
 	if !isSuccessHttpCode(res.StatusCode) {
@@ -132,6 +185,19 @@ func (q executorQueue) processTask(task *executorTask) {
 				Msgf("[Discord] Received unexpected response from server: %d", res.StatusCode)
 			return
 		}
+	}
+
+	var msg Message
+	if err = json.NewDecoder(res.Body).Decode(&msg); err != nil {
+		log.Error().
+			Err(err).
+			Str("task", task.id.String()).
+			Int("attempt", task.attempts).
+			Msg("[Discord] Failed to parse response body")
+		return
+	}
+	if task.shouldTrack() {
+		q.tracker.TrackMessageID(task.key, msg.ID)
 	}
 
 	log.Debug().

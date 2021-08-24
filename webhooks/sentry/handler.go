@@ -76,7 +76,7 @@ func (h WebhookHandler) handleIssue(action sentry.EventAction, data *sentry.Issu
 		builder.SetColor(0x2ECC71) // resolved
 	}
 
-	r.executor.EnqueueEmbeds(r.config.IssuesWebhookUrl, builder.Build())
+	h.executor.EnqueueEmbed(h.config.IssuesWebhookUrl, builder.Build(), discord.WithTrackingKey(data.Issue.Id))
 
 	return nil
 }
