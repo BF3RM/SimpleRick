@@ -22,16 +22,28 @@ func ProvideWebhookHandler(executor *discord.Executor, config internal.SentryWeb
 	}
 }
 
-func (r WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
-	payload, err := sentry.ParseWebhook(req, r.config.Secret)
+func (h WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
+	payload, err := sentry.ValidatePayload(req, h.config.Secret)
+	if err != nil {
+		log.Error().Err(err).Msg("[Sentry] Failed to validate payload")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	defer req.Body.Close()
+
+	if e := log.Debug(); e.Enabled() {
+		e.Str("body", string(payload)).Msgf("[GitHub] Incoming call")
+	}
+
+	action, event, err := sentry.ParseWebhook(sentry.WebhookResource(req), payload)
 	if err != nil {
 		log.Error().Err(err).Msg("[Sentry] Failed to parse payload")
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	switch data := payload.Data.(type) {
+	switch e := event.(type) {
 	case *sentry.IssueData:
-		err = r.handleIssue(payload.Action, data)
+		err = h.handleIssue(action, e)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -39,7 +51,7 @@ func (r WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r WebhookHandler) handleIssue(action sentry.EventAction, data *sentry.IssueData) error {
+func (h WebhookHandler) handleIssue(action sentry.EventAction, data *sentry.IssueData) error {
 
 	// TODO: Add support for solving as well
 	if action != sentry.IssueCreatedAction && action != sentry.IssueResolvedAction {
