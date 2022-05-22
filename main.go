@@ -7,15 +7,31 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"net/http"
+	"path"
 	"simplerick/webhooks/github"
 	"simplerick/webhooks/sentry"
 )
 
-func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: colorable.NewColorableStdout()})
-
+func setupLogger() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	var writers []io.Writer
+
+	writers = append(writers, zerolog.ConsoleWriter{Out: colorable.NewColorableStdout()})
+	writers = append(writers, &lumberjack.Logger{
+		Filename:   path.Join("logs", "simplerick.log"),
+		MaxSize:    100,
+		MaxAge:     7,
+		MaxBackups: 3,
+	})
+
+	log.Logger = zerolog.New(zerolog.MultiLevelWriter(writers...)).With().Timestamp().Logger()
+}
+
+func main() {
+	setupLogger()
 
 	ctx := context.Background()
 	app, err := setupApplication(ctx)

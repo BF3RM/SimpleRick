@@ -114,3 +114,6 @@ modules.xml
 .env
 
 # End of https://www.toptal.com/developers/gitignore/api/jetbrains+all,godist/
+
+# Logs
+logs/

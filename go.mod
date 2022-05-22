@@ -3,6 +3,7 @@ module simplerick
 go 1.15
 
 require (
+	github.com/BurntSushi/toml v1.1.0 // indirect
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0
@@ -11,4 +12,6 @@ require (
 	github.com/joho/godotenv v1.3.0
 	github.com/mattn/go-colorable v0.1.8
 	github.com/rs/zerolog v1.23.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

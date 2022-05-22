@@ -10,7 +10,7 @@ type WebhookPayload struct {
 	Event  Event
 	Action EventAction `json:"action"`
 	Actor  struct {
-		Id   int    `json:"id"`
+		Id   string `json:"id"`
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"actor"`

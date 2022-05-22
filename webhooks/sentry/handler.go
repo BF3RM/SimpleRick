@@ -32,7 +32,7 @@ func (h WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	if e := log.Debug(); e.Enabled() {
-		e.Str("body", string(payload)).Msgf("[GitHub] Incoming call")
+		e.Str("body", string(payload)).Msgf("[Sentry] Incoming call")
 	}
 
 	action, event, err := sentry.ParseWebhook(sentry.WebhookResource(req), payload)
