@@ -3,12 +3,18 @@ package github
 import (
 	"fmt"
 	"github.com/google/go-github/github"
+	"github.com/rs/zerolog/log"
 	"simplerick/internal/discord"
 	"simplerick/internal/utils"
 	"strings"
 )
 
 func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
+	if *event.Sender.Type == "Bot" {
+		log.Debug().Msg("[GitHub] Ignored push event from bot")
+		return nil
+	}
+
 	branch := (*event.Ref)[len("refs/heads/"):]
 	lenCommits := len(event.Commits)
 
