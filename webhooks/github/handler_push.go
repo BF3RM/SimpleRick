@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"github.com/google/go-github/github"
 	"github.com/rs/zerolog/log"
 	"simplerick/internal/discord"
@@ -14,6 +15,17 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		log.Debug().Msg("[GitHub] Ignored push event from bot")
 		return nil
 	}
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "github",
+		Message:  "Handling push event",
+		Data: map[string]interface{}{
+			"repo":   *event.Repo.Name,
+			"sender": *event.Sender.Login,
+			"ref":    *event.Ref,
+		},
+		Level: sentry.LevelInfo,
+	})
 
 	branch := (*event.Ref)[len("refs/heads/"):]
 	lenCommits := len(event.Commits)

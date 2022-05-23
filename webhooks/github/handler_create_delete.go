@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"github.com/google/go-github/github"
 	"simplerick/internal/discord"
 )
@@ -10,6 +11,17 @@ func (h WebhookHandler) handleCreateEvent(event *github.CreateEvent) error {
 	if *event.RefType != "branch" {
 		return nil
 	}
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "github",
+		Message:  "Handling create event",
+		Data: map[string]interface{}{
+			"repo":   *event.Repo.Name,
+			"sender": *event.Sender.Login,
+			"ref":    *event.Ref,
+		},
+		Level: sentry.LevelInfo,
+	})
 
 	builder := discord.NewEmbedBuilder().
 		SetColor(0x00BCD4).
@@ -30,6 +42,17 @@ func (h WebhookHandler) handleDeleteEvent(event *github.DeleteEvent) error {
 	if *event.RefType != "branch" {
 		return nil
 	}
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "github",
+		Message:  "Handling delete event",
+		Data: map[string]interface{}{
+			"repo":   *event.Repo.Name,
+			"sender": *event.Sender.Login,
+			"ref":    *event.Ref,
+		},
+		Level: sentry.LevelInfo,
+	})
 
 	builder := discord.NewEmbedBuilder().
 		SetColor(0x00BCD4).

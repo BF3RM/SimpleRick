@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -111,6 +112,16 @@ func (q executorQueue) processTask(task *executorTask) {
 		Str("task", task.id.String()).
 		Int("attempt", task.attempts).
 		Msg("[Discord] Started processing task")
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "discord",
+		Message:  "Processing task",
+		Data: map[string]interface{}{
+			"id":      task.id,
+			"attempt": task.attempts,
+		},
+		Level: sentry.LevelInfo,
+	})
 
 	var buf bytes.Buffer
 	err := json.NewEncoder(&buf).Encode(&task.payload)
