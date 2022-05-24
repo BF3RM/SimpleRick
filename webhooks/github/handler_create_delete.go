@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/go-github/github"
+	"github.com/rs/zerolog/log"
 	"simplerick/internal/discord"
 )
 
 func (h WebhookHandler) handleCreateEvent(event *github.CreateEvent) error {
+	if *event.Sender.Type == "Bot" {
+		log.Debug().Msg("[GitHub] Ignored create event from bot")
+		return nil
+	}
+
 	if *event.RefType != "branch" {
 		return nil
 	}
@@ -39,6 +45,11 @@ func (h WebhookHandler) handleCreateEvent(event *github.CreateEvent) error {
 }
 
 func (h WebhookHandler) handleDeleteEvent(event *github.DeleteEvent) error {
+	if *event.Sender.Type == "Bot" {
+		log.Debug().Msg("[GitHub] Ignored delete event from bot")
+		return nil
+	}
+
 	if *event.RefType != "branch" {
 		return nil
 	}
