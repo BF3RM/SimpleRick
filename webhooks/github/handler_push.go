@@ -63,7 +63,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		messages := strings.Split(*commit.Message, "\n")
 
 		title := fmt.Sprintf("`%s` %s", sha, messages[0])
-		description := fmt.Sprintf("- **%s**", *commit.Committer.Name)
+		description := fmt.Sprintf("- **%s**", *commit.Author.Name)
 
 		if len(messages) > 1 {
 			description = utils.Ellipsis(strings.Join(messages[1:], "\n"), 255-len(description)) + "\n" + description
