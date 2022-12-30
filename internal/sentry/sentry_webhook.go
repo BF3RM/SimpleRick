@@ -45,24 +45,12 @@ const (
 	ErrorCreatedAction        EventAction = "created"
 )
 
-func ParseWebhook(req *http.Request, secret []byte) (*WebhookPayload, error) {
-	defer func() {
-		_ = req.Body.Close()
-	}()
-
+func ValidatePayload(req *http.Request, secret []byte) (payload []byte, err error) {
 	if req.Method != http.MethodPost {
 		return nil, ErrInvalidHTTPMethod
 	}
 
-	event := req.Header.Get("Sentry-Hook-Resource")
-	if len(event) == 0 {
-		return nil, ErrMissingResourceHeader
-	}
-
-	ctx := new(WebhookPayload)
-	ctx.Event = Event(event)
-
-	payload, err := ioutil.ReadAll(req.Body)
+	payload, err = ioutil.ReadAll(req.Body)
 	if err != nil || len(payload) == 0 {
 		return nil, ErrParsingPayload
 	}
@@ -81,9 +69,24 @@ func ParseWebhook(req *http.Request, secret []byte) (*WebhookPayload, error) {
 		}
 	}
 
-	if err := json.Unmarshal(payload, &ctx); err != nil {
-		return nil, err
+	return payload, nil
+}
+
+func WebhookResource(req *http.Request) string {
+	return req.Header.Get("Sentry-Hook-Resource")
+}
+
+func ParseWebhook(resource string, payload []byte) (EventAction, interface{}, error) {
+	if len(resource) == 0 {
+		return EventAction(""), nil, ErrMissingResourceHeader
 	}
 
-	return ctx, nil
+	ctx := new(WebhookPayload)
+	ctx.Event = Event(resource)
+
+	if err := json.Unmarshal(payload, &ctx); err != nil {
+		return EventAction(""), nil, err
+	}
+
+	return ctx.Action, ctx.Data, nil
 }

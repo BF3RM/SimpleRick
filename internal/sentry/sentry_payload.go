@@ -10,7 +10,6 @@ type WebhookPayload struct {
 	Event  Event
 	Action EventAction `json:"action"`
 	Actor  struct {
-		Id   int    `json:"id"`
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"actor"`
@@ -38,7 +37,8 @@ func (w *WebhookPayload) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unknown event %s", w.Event)
 	}
 
-	return json.Unmarshal(data, w)
+	type tmp WebhookPayload // avoids infinite recursion
+	return json.Unmarshal(data, (*tmp)(w))
 }
 
 type InstallationData struct {

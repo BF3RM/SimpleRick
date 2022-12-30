@@ -2,11 +2,12 @@ package sentry
 
 import (
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"simplerick/internal"
 	"simplerick/internal/discord"
-	"simplerick/internal/sentry"
+	sentry_api "simplerick/internal/sentry"
 	"time"
 )
 
@@ -22,16 +23,36 @@ func ProvideWebhookHandler(executor *discord.Executor, config internal.SentryWeb
 	}
 }
 
-func (r WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
-	payload, err := sentry.ParseWebhook(req, r.config.Secret)
+func (h WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
+	payload, err := sentry_api.ValidatePayload(req, h.config.Secret)
+	if err != nil {
+		log.Error().Err(err).Msg("[Sentry] Failed to validate payload")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	defer req.Body.Close()
+
+	if e := log.Debug(); e.Enabled() {
+		e.Str("body", string(payload)).Msgf("[Sentry] Incoming call")
+	}
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Level:    sentry.LevelInfo,
+		Category: "sentry",
+		Message:  "Incoming webhook call",
+		Data: map[string]interface{}{
+			"remote": req.RemoteAddr,
+		},
+	})
+
+	action, event, err := sentry_api.ParseWebhook(sentry_api.WebhookResource(req), payload)
 	if err != nil {
 		log.Error().Err(err).Msg("[Sentry] Failed to parse payload")
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	switch data := payload.Data.(type) {
-	case *sentry.IssueData:
-		err = r.handleIssue(payload.Action, data)
+	switch e := event.(type) {
+	case *sentry_api.IssueData:
+		err = h.handleIssue(action, e)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -39,12 +60,21 @@ func (r WebhookHandler) Handler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r WebhookHandler) handleIssue(action sentry.EventAction, data *sentry.IssueData) error {
+func (h WebhookHandler) handleIssue(action sentry_api.EventAction, data *sentry_api.IssueData) error {
 
 	// TODO: Add support for solving as well
-	if action != sentry.IssueCreatedAction && action != sentry.IssueResolvedAction {
+	if action != sentry_api.IssueCreatedAction && action != sentry_api.IssueResolvedAction {
 		return nil
 	}
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "sentry",
+		Message:  "Handling issue event",
+		Data: map[string]interface{}{
+			"action": action,
+		},
+		Level: sentry.LevelInfo,
+	})
 
 	builder := discord.NewEmbedBuilder().
 		SetTitle(data.Issue.ShortId).
@@ -58,13 +88,13 @@ func (r WebhookHandler) handleIssue(action sentry.EventAction, data *sentry.Issu
 		SetFooter("Simple Rick - Sentry").
 		AddTimestamp()
 
-	if action == sentry.IssueCreatedAction {
+	if action == sentry_api.IssueCreatedAction {
 		builder.SetColor(0xE74C3C) // unsolved
 	} else {
 		builder.SetColor(0x2ECC71) // resolved
 	}
 
-	r.executor.EnqueueEmbeds(r.config.IssuesWebhookUrl, builder.Build())
+	h.executor.EnqueueEmbed(h.config.IssuesWebhookUrl, builder.Build(), discord.WithTrackingKey(data.Issue.Id))
 
 	return nil
 }

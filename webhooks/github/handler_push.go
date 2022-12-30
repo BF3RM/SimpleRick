@@ -2,13 +2,31 @@ package github
 
 import (
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"github.com/google/go-github/github"
+	"github.com/rs/zerolog/log"
 	"simplerick/internal/discord"
 	"simplerick/internal/utils"
 	"strings"
 )
 
 func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
+	if *event.Sender.Type == "Bot" {
+		log.Debug().Msg("[GitHub] Ignored push event from bot")
+		return nil
+	}
+
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "github",
+		Message:  "Handling push event",
+		Data: map[string]interface{}{
+			"repo":   *event.Repo.Name,
+			"sender": *event.Sender.Login,
+			"ref":    *event.Ref,
+		},
+		Level: sentry.LevelInfo,
+	})
+
 	branch := (*event.Ref)[len("refs/heads/"):]
 	lenCommits := len(event.Commits)
 
@@ -45,7 +63,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		messages := strings.Split(*commit.Message, "\n")
 
 		title := fmt.Sprintf("`%s` %s", sha, messages[0])
-		description := fmt.Sprintf("- **%s**", *commit.Committer.Name)
+		description := fmt.Sprintf("- **%s**", *commit.Author.Name)
 
 		if len(messages) > 1 {
 			description = utils.Ellipsis(strings.Join(messages[1:], "\n"), 255-len(description)) + "\n" + description
@@ -54,7 +72,7 @@ func (h WebhookHandler) handlePushEvent(event *github.PushEvent) error {
 		builder.AddField(title, description)
 	}
 
-	h.executor.EnqueueEmbeds(h.config.ChangelogWebhookUrl, builder.Build())
+	h.executor.EnqueueEmbed(h.config.ChangelogWebhookUrl, builder.Build())
 
 	return nil
 }

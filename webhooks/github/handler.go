@@ -1,6 +1,7 @@
 package github
 
 import (
+	"github.com/getsentry/sentry-go"
 	"github.com/google/go-github/github"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -32,6 +33,14 @@ func (h WebhookHandler) Handler(w http.ResponseWriter, r *http.Request) {
 	if e := log.Debug(); e.Enabled() {
 		e.Str("body", string(payload)).Msgf("[GitHub] Incoming call")
 	}
+	sentry.AddBreadcrumb(&sentry.Breadcrumb{
+		Level:    sentry.LevelInfo,
+		Category: "github",
+		Message:  "Incoming webhook call",
+		Data: map[string]interface{}{
+			"remote": r.RemoteAddr,
+		},
+	})
 
 	event, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
