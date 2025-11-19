@@ -11,10 +11,10 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /simplerick
+RUN CGO_ENABLED=0 go build -o /simplerick
 
 ## Deploy
-FROM gcr.io/distroless/base-debian10
+FROM gcr.io/distroless/static-debian12
 
 COPY --from=build /simplerick /simplerick
 
